@@ -1,8 +1,9 @@
 package rest
 
 import (
-	"github.com/ant0ine/go-json-rest/rest/test"
 	"testing"
+
+	"github.com/ant0ine/go-json-rest/rest/test"
 )
 
 func TestJsonpMiddleware(t *testing.T) {
@@ -14,16 +15,12 @@ func TestJsonpMiddleware(t *testing.T) {
 
 	// router app with success and error paths
 	router, err := MakeRouter(
-		&Route{"GET", "/ok",
-			func(w ResponseWriter, r *Request) {
-				w.WriteJson(map[string]string{"Id": "123"})
-			},
-		},
-		&Route{"GET", "/error",
-			func(w ResponseWriter, r *Request) {
-				Error(w, "jsonp error", 500)
-			},
-		},
+		Get("/ok", func(w ResponseWriter, r *Request) {
+			w.WriteJson(map[string]string{"Id": "123"})
+		}),
+		Get("/error", func(w ResponseWriter, r *Request) {
+			Error(w, "jsonp error", 500)
+		}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -37,10 +34,14 @@ func TestJsonpMiddleware(t *testing.T) {
 	recorded := test.RunRequest(t, handler, test.MakeSimpleRequest("GET", "http://localhost/ok?callback=parseResponse", nil))
 	recorded.CodeIs(200)
 	recorded.HeaderIs("Content-Type", "text/javascript")
-	recorded.BodyIs("parseResponse({\"Id\":\"123\"})")
+	recorded.HeaderIs("Content-Disposition", "filename=f.txt")
+	recorded.HeaderIs("X-Content-Type-Options", "nosniff")
+	recorded.BodyIs("/**/parseResponse({\"Id\":\"123\"})")
 
 	recorded = test.RunRequest(t, handler, test.MakeSimpleRequest("GET", "http://localhost/error?callback=parseResponse", nil))
 	recorded.CodeIs(500)
 	recorded.HeaderIs("Content-Type", "text/javascript")
-	recorded.BodyIs("parseResponse({\"Error\":\"jsonp error\"})")
+	recorded.HeaderIs("Content-Disposition", "filename=f.txt")
+	recorded.HeaderIs("X-Content-Type-Options", "nosniff")
+	recorded.BodyIs("/**/parseResponse({\"Error\":\"jsonp error\"})")
 }

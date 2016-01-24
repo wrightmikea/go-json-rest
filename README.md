@@ -3,7 +3,7 @@
 
 *A quick and easy way to setup a RESTful JSON API*
 
-[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/ant0ine/go-json-rest/rest) [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/ant0ine/go-json-rest/master/LICENSE) [![build](https://img.shields.io/travis/ant0ine/go-json-rest.svg?style=flat)](https://travis-ci.org/ant0ine/go-json-rest)
+[![godoc](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/ant0ine/go-json-rest/rest) [![license](https://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/ant0ine/go-json-rest/master/LICENSE) [![build](https://img.shields.io/travis/ant0ine/go-json-rest.svg?style=flat)](https://travis-ci.org/ant0ine/go-json-rest)
 
 
 **Go-Json-Rest** is a thin layer on top of `net/http` that helps building RESTful JSON APIs easily. It provides fast and scalable request routing using a Trie based implementation, helpers to deal with JSON requests and responses, and middlewares for functionalities like CORS, Auth, Gzip, Status ...
@@ -27,6 +27,7 @@
 	  - [CORS](#cors)
 	  - [JSONP](#jsonp)
 	  - [Basic Auth](#basic-auth)
+	  - [Force HTTPS](#forcessl)
 	  - [Status](#status)
 	  - [Status Auth](#status-auth)
   - [Advanced](#advanced)
@@ -39,6 +40,7 @@
 	  - [Graceful Shutdown](#graceful-shutdown)
 	  - [SPDY](#spdy)
 	  - [Google App Engine](#gae)
+	  - [Websocket](#websocket)
 - [External Documentation](#external-documentation)
 - [Version 3 release notes](#version-3-release-notes)
 - [Migration guide from v2 to v3](#migration-guide-from-v2-to-v3)
@@ -69,7 +71,7 @@ This package is "go-gettable", just do:
 
 The recommended way of using this library in your project is to use the **"vendoring"** method,
 where this library code is copied in your repository at a specific revision.
-[This page](http://nathany.com/go-packages/) is a good summary of package management in Go.
+[This page](https://nathany.com/go-packages/) is a good summary of package management in Go.
 
 
 ## Middlewares
@@ -84,6 +86,7 @@ Core Middlewares:
 | **ContentTypeChecker** | Verify the request content type |
 | **Cors** | CORS server side implementation |
 | **Gzip** | Compress the responses |
+| **If** | Conditionally execute a Middleware at runtime |
 | **JsonIndent** | Easy to read JSON |
 | **Jsonp** | Response as JSONP |
 | **PoweredBy** | Manage the X-Powered-By response header |
@@ -97,6 +100,9 @@ Third Party Middlewares:
 |------|-------------|
 | **[Statsd](https://github.com/ant0ine/go-json-rest-middleware-statsd)** | Send stats to a statsd server |
 | **[JWT](https://github.com/StephanDollberg/go-json-rest-middleware-jwt)** | Provides authentication via Json Web Tokens |
+| **[AuthToken](https://github.com/grayj/go-json-rest-middleware-tokenauth)** | Provides a Token Auth implementation |
+| **[ForceSSL](https://github.com/jadengore/go-json-rest-middleware-force-ssl)** | Forces SSL on requests |
+| **[SecureRedirect](https://github.com/clyphub/go-json-rest-middleware)** | Redirect clients from HTTP to HTTPS |
 
 *If you have a Go-Json-Rest compatible middleware, feel free to submit a PR to add it in this list, and in the examples.*
 
@@ -162,22 +168,18 @@ import (
 	"net/http"
 )
 
-type Message struct {
-	Body string
-}
-
 func main() {
 	api := rest.NewApi()
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/lookup/#host", func(w rest.ResponseWriter, req *rest.Request) {
+		rest.Get("/lookup/#host", func(w rest.ResponseWriter, req *rest.Request) {
 			ip, err := net.LookupIP(req.PathParam("host"))
 			if err != nil {
 				rest.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			w.WriteJson(&ip)
-		}},
+		}),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -222,10 +224,10 @@ func main() {
 	api := rest.NewApi()
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/countries", GetAllCountries},
-		&rest.Route{"POST", "/countries", PostCountry},
-		&rest.Route{"GET", "/countries/:code", GetCountry},
-		&rest.Route{"DELETE", "/countries/:code", DeleteCountry},
+		rest.Get("/countries", GetAllCountries),
+		rest.Post("/countries", PostCountry),
+		rest.Get("/countries/:code", GetCountry),
+		rest.Delete("/countries/:code", DeleteCountry),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -344,11 +346,11 @@ func main() {
 	api := rest.NewApi()
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/users", users.GetAllUsers},
-		&rest.Route{"POST", "/users", users.PostUser},
-		&rest.Route{"GET", "/users/:id", users.GetUser},
-		&rest.Route{"PUT", "/users/:id", users.PutUser},
-		&rest.Route{"DELETE", "/users/:id", users.DeleteUser},
+		rest.Get("/users", users.GetAllUsers),
+		rest.Post("/users", users.PostUser),
+		rest.Get("/users/:id", users.GetUser),
+		rest.Put("/users/:id", users.PutUser),
+		rest.Delete("/users/:id", users.DeleteUser),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -474,9 +476,9 @@ func main() {
 	api.Use(rest.DefaultDevStack...)
 
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/message", func(w rest.ResponseWriter, req *rest.Request) {
+		rest.Get("/message", func(w rest.ResponseWriter, req *rest.Request) {
 			w.WriteJson(map[string]string{"Body": "Hello World!"})
-		}},
+		}),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -532,11 +534,11 @@ func main() {
 	api := rest.NewApi()
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/reminders", i.GetAllReminders},
-		&rest.Route{"POST", "/reminders", i.PostReminder},
-		&rest.Route{"GET", "/reminders/:id", i.GetReminder},
-		&rest.Route{"PUT", "/reminders/:id", i.PutReminder},
-		&rest.Route{"DELETE", "/reminders/:id", i.DeleteReminder},
+		rest.Get("/reminders", i.GetAllReminders),
+		rest.Post("/reminders", i.PostReminder),
+		rest.Get("/reminders/:id", i.GetReminder),
+		rest.Put("/reminders/:id", i.PutReminder),
+		rest.Delete("/reminders/:id", i.DeleteReminder),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -673,7 +675,7 @@ func main() {
 		AccessControlMaxAge:           3600,
 	})
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/countries", GetAllCountries},
+		rest.Get("/countries", GetAllCountries),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -778,6 +780,49 @@ func main() {
 
 ```
 
+#### ForceSSL
+
+Demonstrate how to use the [ForceSSL Middleware](https://github.com/jadengore/go-json-rest-middleware-force-ssl) to force HTTPS on requests to a `go-json-rest` API.
+
+For the purposes of this demo, we are using HTTP for all requests and checking the `X-Forwarded-Proto` header to see if it is set to HTTPS (many routers set this to show what type of connection the client is using, such as Heroku). To do a true HTTPS test, make sure and use [`http.ListenAndServeTLS`](https://golang.org/pkg/net/http/#ListenAndServeTLS) with a valid certificate and key file.
+
+Additional documentation for the ForceSSL middleware can be found [here](https://github.com/jadengore/go-json-rest-middleware-force-ssl).
+
+curl demo:
+``` sh
+curl -i 127.0.0.1:8080/
+curl -H "X-Forwarded-Proto:https" -i 127.0.0.1:8080/
+```
+
+code:
+``` go
+package main
+
+import (
+	"github.com/ant0ine/go-json-rest/rest"
+	"github.com/jadengore/go-json-rest-middleware-force-ssl"
+	"log"
+	"net/http"
+)
+
+func main() {
+	api := rest.NewApi()
+	api.Use(&forceSSL.Middleware{
+		TrustXFPHeader:     true,
+		Enable301Redirects: false,
+	})
+	api.SetApp(rest.AppSimple(func(w rest.ResponseWriter, r *rest.Request) {
+		w.WriteJson(map[string]string{"body": "Hello World!"})
+	}))
+
+	// For the purposes of this demo, only HTTP connections accepted.
+	// For true HTTPS, use ListenAndServeTLS.
+	// https://golang.org/pkg/net/http/#ListenAndServeTLS
+	log.Fatal(http.ListenAndServe(":8080", api.MakeHandler()))
+}
+
+```
+
 #### Status
 
 Demonstrate how to setup a `/.status` endpoint
@@ -828,11 +873,9 @@ func main() {
 	api.Use(statusMw)
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/.status",
-			func(w rest.ResponseWriter, r *rest.Request) {
-				w.WriteJson(statusMw.GetStatus())
-			},
-		},
+		rest.Get("/.status", func(w rest.ResponseWriter, r *rest.Request) {
+			w.WriteJson(statusMw.GetStatus())
+		}),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -882,14 +925,12 @@ func main() {
 		},
 	}
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/countries", GetAllCountries},
-		&rest.Route{"GET", "/.status",
-			auth.MiddlewareFunc(
-				func(w rest.ResponseWriter, r *rest.Request) {
-					w.WriteJson(statusMw.GetStatus())
-				},
-			),
-		},
+		rest.Get("/countries", GetAllCountries),
+		rest.Get("/.status", auth.MiddlewareFunc(
+			func(w rest.ResponseWriter, r *rest.Request) {
+				w.WriteJson(statusMw.GetStatus())
+			},
+		)),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -931,9 +972,9 @@ Demonstrates how to use the [Json Web Token Auth Middleware](https://github.com/
 
 curl demo:
 ``` sh
-curl -d '{"username": "admin", "password": "admin"}' -H "Content-Type:application/json" http://localhost:8080/login
+curl -d '{"username": "admin", "password": "admin"}' -H "Content-Type:application/json" http://localhost:8080/api/login
 curl -H "Authorization:Bearer TOKEN_RETURNED_FROM_ABOVE" http://localhost:8080/api/auth_test
-curl -H "Authorization:Bearer TOKEN_RETURNED_FROM_ABOVE" http://localhost:8080/api/refrest_token
+curl -H "Authorization:Bearer TOKEN_RETURNED_FROM_ABOVE" http://localhost:8080/api/refresh_token
 ```
 
 code:
@@ -941,11 +982,12 @@ code:
 package main
 
 import (
-	"github.com/StephanDollberg/go-json-rest-middleware-jwt"
-	"github.com/ant0ine/go-json-rest/rest"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/StephanDollberg/go-json-rest-middleware-jwt"
+	"github.com/ant0ine/go-json-rest/rest"
 )
 
 func handle_auth(w rest.ResponseWriter, r *rest.Request) {
@@ -953,35 +995,32 @@ func handle_auth(w rest.ResponseWriter, r *rest.Request) {
 }
 
 func main() {
-	jwt_middleware := jwt.JWTMiddleware{
+	jwt_middleware := &jwt.JWTMiddleware{
 		Key:        []byte("secret key"),
 		Realm:      "jwt auth",
 		Timeout:    time.Hour,
 		MaxRefresh: time.Hour * 24,
 		Authenticator: func(userId string, password string) bool {
-			if userId == "admin" && password == "admin" {
-				return true
-			}
-			return false
+			return userId == "admin" && password == "admin"
 		}}
 
-	login_api := rest.NewApi()
-	login_api.Use(rest.DefaultDevStack...)
-	login_router, _ := rest.MakeRouter(
-		&rest.Route{"POST", "/login", jwt_middleware.LoginHandler},
+	api := rest.NewApi()
+	api.Use(rest.DefaultDevStack...)
+	// we use the IfMiddleware to remove certain paths from needing authentication
+	api.Use(&rest.IfMiddleware{
+		Condition: func(request *rest.Request) bool {
+			return request.URL.Path != "/login"
+		},
+		IfTrue: jwt_middleware,
+	})
+	api_router, _ := rest.MakeRouter(
+		rest.Post("/login", jwt_middleware.LoginHandler),
+		rest.Get("/auth_test", handle_auth),
+		rest.Get("/refresh_token", jwt_middleware.RefreshHandler),
 	)
-	login_api.SetApp(login_router)
+	api.SetApp(api_router)
 
-	main_api := rest.NewApi()
-	main_api.Use(&jwt_middleware)
-	main_api.Use(rest.DefaultDevStack...)
-	main_api_router, _ := rest.MakeRouter(
-		&rest.Route{"GET", "/auth_test", handle_auth},
-		&rest.Route{"GET", "/refresh_token", jwt_middleware.RefreshHandler})
-	main_api.SetApp(main_api_router)
-
-	http.Handle("/", login_api.MakeHandler())
-	http.Handle("/api/", http.StripPrefix("/api", main_api.MakeHandler()))
+	http.Handle("/api/", http.StripPrefix("/api", api.MakeHandler()))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
@@ -1028,7 +1067,7 @@ func main() {
 	api.Use(&rest.AccessLogApacheMiddleware{})
 	api.Use(rest.DefaultCommonStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/stream", StreamThings},
+		rest.Get("/stream", StreamThings),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -1096,10 +1135,10 @@ func main() {
 	api := rest.NewApi()
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/message.txt", func(w rest.ResponseWriter, req *rest.Request) {
+		rest.Get("/message.txt", func(w rest.ResponseWriter, req *rest.Request) {
 			w.Header().Set("Content-Type", "text/plain")
 			w.(http.ResponseWriter).Write([]byte("Hello World!"))
-		}},
+		}),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -1192,18 +1231,19 @@ func (mw *SemVerMiddleware) MiddlewareFunc(handler rest.HandlerFunc) rest.Handle
 }
 
 func main() {
-	api := rest.NewApi()
-	api.Use(rest.DefaultDevStack...)
-	api.Use(SemVerMiddleware{
+
+	svmw := SemVerMiddleware{
 		MinVersion: "1.0.0",
 		MaxVersion: "3.0.0",
-	})
+	}
+	api := rest.NewApi()
+	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/#version/message", svmw.MiddlewareFunc(
+		rest.Get("/#version/message", svmw.MiddlewareFunc(
 			func(w rest.ResponseWriter, req *rest.Request) {
 				version := req.Env["VERSION"].(*semver.Version)
 				if version.Major == 2 {
-					// http://en.wikipedia.org/wiki/Second-system_effect
+					// https://en.wikipedia.org/wiki/Second-system_effect
 					w.WriteJson(map[string]string{
 						"Body": "Hello broken World!",
 					})
@@ -1213,7 +1253,7 @@ func main() {
 					})
 				}
 			},
-		)},
+		)),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -1271,7 +1311,7 @@ func main() {
 
 #### NewRelic
 
-NewRelic integration based on the GoRelic plugin: [github.com/yvasiyarov/gorelic](http://github.com/yvasiyarov/gorelic)
+NewRelic integration based on the GoRelic plugin: [github.com/yvasiyarov/gorelic](https://github.com/yvasiyarov/gorelic)
 
 curl demo:
 ``` sh
@@ -1336,7 +1376,7 @@ func main() {
 
 #### Graceful Shutdown
 
-This example uses [github.com/stretchr/graceful](https://github.com/stretchr/graceful) to try to be nice with the clients waiting for responses during a server shutdown (or restart).
+This example uses [https://github.com/tylerb/graceful](https://github.com/tylerb/graceful) to try to be nice with the clients waiting for responses during a server shutdown (or restart).
 The HTTP response takes 10 seconds to be completed, printing a message on the wire every second.
 10 seconds is also the timeout set for the graceful shutdown.
 You can play with these numbers to show that the server waits for the responses to complete.
@@ -1353,7 +1393,7 @@ package main
 import (
 	"fmt"
 	"github.com/ant0ine/go-json-rest/rest"
-	"github.com/stretchr/graceful"
+        "gopkg.in/tylerb/graceful.v1"
 	"log"
 	"net/http"
 	"time"
@@ -1363,7 +1403,7 @@ func main() {
 	api := rest.NewApi()
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/message", func(w rest.ResponseWriter, req *rest.Request) {
+		rest.Get("/message", func(w rest.ResponseWriter, req *rest.Request) {
 			for cpt := 1; cpt <= 10; cpt++ {
 
 				// wait 1 second
@@ -1377,7 +1417,7 @@ func main() {
 				// Flush the buffer to client
 				w.(http.Flusher).Flush()
 			}
-		}},
+		}),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -1436,7 +1476,7 @@ func main() {
 	api := rest.NewApi()
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/users/:id", GetUser},
+		rest.Get("/users/:id", GetUser),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -1484,9 +1524,9 @@ func init() {
 	api := rest.NewApi()
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
-		&rest.Route{"GET", "/message", func(w rest.ResponseWriter, req *rest.Request) {
+		&rest.Get("/message", func(w rest.ResponseWriter, req *rest.Request) {
 			w.WriteJson(map[string]string{"Body": "Hello World!"})
-		}},
+		}),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -1497,11 +1537,69 @@ func init() {
 
 ```
 
+#### Websocket
+
+Demonstrate how to run websocket in go-json-rest
+
+go client demo:
+```go
+origin := "http://localhost:8080/"
+url := "ws://localhost:8080/ws"
+ws, err := websocket.Dial(url, "", origin)
+if err != nil {
+	log.Fatal(err)
+}
+if _, err := ws.Write([]byte("hello, world\n")); err != nil {
+	log.Fatal(err)
+}
+var msg = make([]byte, 512)
+var n int
+if n, err = ws.Read(msg); err != nil {
+	log.Fatal(err)
+}
+log.Printf("Received: %s.", msg[:n])
+```
+
+code:
+``` go
+package main
+
+import (
+	"io"
+	"log"
+	"net/http"
+
+	"github.com/ant0ine/go-json-rest/rest"
+	"golang.org/x/net/websocket"
+)
+
+func main() {
+	wsHandler := websocket.Handler(func(ws *websocket.Conn) {
+		io.Copy(ws, ws)
+	})
+
+	router, err := rest.MakeRouter(
+		rest.Get("/ws", func(w rest.ResponseWriter, r *rest.Request) {
+			wsHandler.ServeHTTP(w.(http.ResponseWriter), r.Request)
+		}),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	api := rest.NewApi()
+	api.Use(rest.DefaultDevStack...)
+	api.SetApp(router)
+	log.Fatal(http.ListenAndServe(":8080", api.MakeHandler()))
+}
+
+```
+
 
 
 ## External Documentation
 
-- [Online Documentation (godoc.org)](http://godoc.org/github.com/ant0ine/go-json-rest/rest)
+- [Online Documentation (godoc.org)](https://godoc.org/github.com/ant0ine/go-json-rest/rest)
 
 Old v1 blog posts:
 
@@ -1585,7 +1683,7 @@ In fact the internal code of **go-json-rest** is itself implemented with Middlew
 
 #### The import path has changed to `github.com/ant0ine/go-json-rest/rest`
 
-This is more conform to Go style, and makes [goimports](https://godoc.org/code.google.com/p/go.tools/cmd/goimports) work.
+This is more conform to Go style, and makes [goimports](https://godoc.org/golang.org/x/tools/cmd/goimports) work.
 
 This:
 ``` go
@@ -1695,9 +1793,12 @@ Overall, they provide the same features, but with two methods instead of three, 
 - [Yann Kerhervé](https://github.com/yannk)
 - [Ask Bjørn Hansen](https://github.com/abh)
 - [Paul Lam](https://github.com/Quantisan)
+- [Thanabodee Charoenpiriyakij](https://github.com/wingyplus)
+- [Sebastien Estienne](https://github.com/sebest)
+- [Edward Bramanti](https://github.com/jadengore)
 
 
-Copyright (c) 2013-2015 Antoine Imbert
+Copyright (c) 2013-2016 Antoine Imbert
 
 [MIT License](https://github.com/ant0ine/go-json-rest/blob/master/LICENSE)
 
